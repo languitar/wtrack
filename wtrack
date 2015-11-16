@@ -272,22 +272,32 @@ def main_report(args):
     deltas = deltas.resample(args.frequency, how='sum')
 
     # generate the desired report
+    plot_type = 'bar'
     if args.report == 'total':
         data = deltas['worktime'].apply(
             lambda x: x.astype(float) / 1000000000 / 60 / 60)
     elif args.report == 'delta':
         data = deltas['diff'].apply(
             lambda x: x.astype(float) / 1000000000 / 60 / 60)
+    elif args.report == 'average':
+        plot_type = 'box'
+        data = deltas
+        data['dates'] = data.index
+        data['weekday'] = data.index.weekday
+        data = data.pivot(index='dates', columns='weekday', values='diff')
+        data = data.applymap(lambda x: x.total_seconds() / 60 / 60
+                                       if x is not pd.NaT else np.NaN)
     else:
         assert False
 
     if args.graphical:
         fig = plt.figure()
-        data.plot(kind='bar')
+        data.plot(kind=plot_type, ax=fig.gca())
         fig.tight_layout()
         plt.show()
     else:
         print(data)
+        print(data.describe())
 
 
 def main():
@@ -363,7 +373,7 @@ def main():
              'timeseries.html?highlight=now#offset-aliases')
     report.add_argument(
         'report',
-        choices=['total', 'delta'],
+        choices=['total', 'delta', 'average'],
         help='the kind of report to produce')
     report.set_defaults(func=main_report)
 
@@ -372,4 +382,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

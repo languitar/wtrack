@@ -239,7 +239,7 @@ def main_report(args):
     deltas = times[['worktime']]
     deltas = deltas.resample('1d', how='sum')
     deltas['target'] = targets['target'].reindex(deltas.index)
-    deltas['diff'] = deltas['target'] - deltas['worktime']
+    deltas['diff'] = deltas['worktime'] - deltas['target']
 
     # limit everything to this year
     deltas = deltas[deltas.index >= pd.to_datetime(pd.to_datetime('now').year)]

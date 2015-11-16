@@ -205,8 +205,8 @@ def main_track(args):
   Description: {description}'''.format(
         start=start, end=end, correction=correction, description=description))
 
-    times.loc[len(times)] = [start, end, correction, description]
-    times = times.sort('start')
+    times.loc[-1] = [start, end, correction, description]
+    times = times.sort('start').reset_index(drop=True)
 
     # add missing targets
     targets = _interpolate_targets(targets,

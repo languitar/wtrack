@@ -3,6 +3,7 @@
 from __future__ import print_function
 
 import argparse
+import ConfigParser
 import errno
 import os.path
 import urllib2
@@ -22,6 +23,18 @@ TARGETS_FILE = os.path.join(DATA_DIR, 'targets.csv')
 
 _TIMES_COLUMNS = ['start', 'end', 'correction', 'description']
 _TARGETS_COLUMNS = ['target', 'description']
+
+_WEEKDAY_MAPPING = {
+    0: 'monday',
+    1: 'tuesday',
+    2: 'wednesday',
+    3: 'thursday',
+    4: 'friday',
+    5: 'saturday',
+    6: 'sunday'
+}
+
+_CONFIG = None
 
 
 def _read_data(filename):
@@ -92,24 +105,32 @@ _holidays = {}
 
 
 def _get_holidays(year):
-    # TODO url, threading
     global _holidays
     if int(year) not in _holidays:
-        _holidays[int(year)] = _read_public_holidays(
-            'http://www.schulferien.org/iCal/Feiertage/icals/'
-            'Feiertage_Nordrhein_Westfalen_{}.ics'.format(year))
+        if _CONFIG.has_option('holidays', 'calendar'):
+            _holidays[int(year)] = _read_public_holidays(
+                _CONFIG.get('holidays', 'calendar').format(year=year))
+        else:
+            _holidays[int(year)] = pd.Series()
     return _holidays[int(year)]
 
 
 def _get_default_target(date):
-    if date.dayofweek >= 5:
-        # weekend
-        return pd.Timedelta(0), 'weekend'
-    elif pd.datetools.normalize_date(date) in _get_holidays(date.year):
-        return pd.Timedelta(0), _get_holidays(date.year)[pd.datetools.normalize_date(date)]
+    if pd.datetools.normalize_date(date) in _get_holidays(date.year):
+        return pd.Timedelta(0), _get_holidays(date.year)[
+            pd.datetools.normalize_date(date)]
     else:
-        # TODO from config
-        return pd.Timedelta('8h'), ''
+        target = _CONFIG.get('target_times', 'daily') \
+            if _CONFIG.has_option('target_times', 'daily') else '8h'
+
+        weekday = date.dayofweek
+        assert weekday in _WEEKDAY_MAPPING
+
+        if _CONFIG.has_option('target_times', _WEEKDAY_MAPPING[weekday]):
+            target = _CONFIG.get('target_times',
+                                 _WEEKDAY_MAPPING[weekday])
+
+        return pd.Timedelta(target), ''
 
 
 def _interpolate_targets(targets, start, end):
@@ -270,7 +291,13 @@ def main_report(args):
 
 
 def main():
+    global _CONFIG
 
+    # config file
+    _CONFIG = ConfigParser.ConfigParser()
+    _CONFIG.read([CONFIG_FILE])
+
+    # command line parsing
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     subparsers = parser.add_subparsers(title='subcommands')

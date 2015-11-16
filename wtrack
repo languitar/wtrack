@@ -9,9 +9,11 @@ import urllib2
 import sys
 
 import icalendar
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+pd.set_option('display.max_rows', 999999)
 
 CONFIG_FILE = os.path.expanduser('~/.config/wtrack/config.ini')
 DATA_DIR = os.path.expanduser('~/.local/share/wtrack')
@@ -128,7 +130,8 @@ def _interpolate_targets(targets, start, end):
             target, description = _get_default_target(date)
             print(
                 'Assuming target work time for {}: {} '
-                '(description: {})'.format(date, target, description))
+                '(description: {})'.format(date, target, description),
+                file=sys.stderr)
             return pd.Series({'index': row['index'],
                               'target': target,
                               'description': description})
@@ -241,30 +244,41 @@ def main_report(args):
     deltas['target'] = targets['target'].reindex(deltas.index)
     deltas['diff'] = deltas['worktime'] - deltas['target']
 
-    # limit everything to this year
-    deltas = deltas[deltas.index >= pd.to_datetime(pd.to_datetime('now').year)]
+    # limit to user choice
+    deltas = deltas[deltas.index >= pd.to_datetime(args.since)]
 
-    # weekly work time
-    weekly_worktime = times['worktime'].resample('w', how='sum')
-    print(weekly_worktime)
-    weekly_worktime.index = weekly_worktime.index.to_series().apply(
-        lambda x: x.weekofyear)
-    weekly_worktime = weekly_worktime.apply(lambda x: x.astype(float) /
-                                            1000000000 / 60 / 60)
-    print(weekly_worktime)
+    # resample according to desired report type
+    deltas = deltas.resample(args.frequency, how='sum')
 
-    # weekly differences
-    print(deltas['diff'].resample('w', how='sum').apply(
-        lambda x: x.astype(float) / 1000000000 / 60 / 60))
+    # generate the desired report
+    if args.report == 'total':
+        data = deltas['worktime'].apply(
+            lambda x: x.astype(float) / 1000000000 / 60 / 60)
+    elif args.report == 'delta':
+        data = deltas['diff'].apply(
+            lambda x: x.astype(float) / 1000000000 / 60 / 60)
+    else:
+        assert False
+
+    if args.graphical:
+        fig = plt.figure()
+        data.plot(kind='bar')
+        fig.tight_layout()
+        plt.show()
+    else:
+        print(data)
 
 
 def main():
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     subparsers = parser.add_subparsers(title='subcommands')
 
-    track = subparsers.add_parser('track',
-                                  description='Add a bunch of work')
+    track = subparsers.add_parser(
+        'track',
+        description='Add a bunch of work',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     track.set_defaults(func=main_track)
     track.add_argument(
         '-c', '--correction',
@@ -285,7 +299,8 @@ def main():
 
     target = subparsers.add_parser(
         'target',
-        description='Get or set the target work time for a day')
+        description='Get or set the target work time for a day',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     target.set_defaults(func=main_target)
     target.add_argument(
         'date',
@@ -303,7 +318,26 @@ def main():
 
     report = subparsers.add_parser(
         'report',
-        description='Reports on the work time')
+        description='Reports on the work time',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    report.add_argument(
+        '-s', '--since',
+        default='1/1/{}'.format(pd.to_datetime('now').year),
+        help='start reporting at this date')
+    report.add_argument(
+        '-g', '--graphical',
+        default=False,
+        action='store_true',
+        help='Show report in a plot')
+    report.add_argument(
+        'frequency',
+        help='sampling frequency for the report. Legal pandas frequency:'
+             'http://pandas.pydata.org/pandas-docs/version/0.17.0/'
+             'timeseries.html?highlight=now#offset-aliases')
+    report.add_argument(
+        'report',
+        choices=['total', 'delta'],
+        help='the kind of report to produce')
     report.set_defaults(func=main_report)
 
     args = parser.parse_args()

@@ -167,7 +167,7 @@ def main_track(args):
 
     start = pd.to_datetime(args.start)
     end = pd.to_datetime(args.end)
-    correction = pd.to_datetime(args.correction)
+    correction = pd.Timedelta(args.correction)
     description = args.description
 
     # --- validity checks

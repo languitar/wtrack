@@ -282,10 +282,10 @@ def main_report(args):
     plot_type = 'bar'
     if args.report == 'total':
         data = deltas['worktime'].apply(
-            lambda x: x.astype(float) / 1000000000 / 60 / 60)
+            lambda x: x / np.timedelta64(1, 's') /  60 / 60)
     elif args.report == 'delta':
         data = deltas['diff'].apply(
-            lambda x: x.astype(float) / 1000000000 / 60 / 60)
+            lambda x: x / np.timedelta64(1, 's') /  60 / 60)
     elif args.report == 'average':
         plot_type = 'box'
         data = deltas

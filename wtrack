@@ -56,7 +56,7 @@ def _read_times(filename):
         data['end'] = pd.to_datetime(data['end'])
         data['correction'] = pd.to_timedelta(data['correction'])
         data['description'] = data['description'].fillna('')
-        data = data.sort('start')
+        data = data.sort_values('start')
         return data
     except IOError as error:
         if error.errno == errno.ENOENT:
@@ -123,9 +123,9 @@ def _get_holidays(year):
 
 
 def _get_default_target(date):
-    if pd.datetools.normalize_date(date) in _get_holidays(date.year):
+    if pd.tslib.normalize_date(date) in _get_holidays(date.year):
         return pd.Timedelta(0), _get_holidays(date.year)[
-            pd.datetools.normalize_date(date)]
+            pd.tslib.normalize_date(date)]
     else:
         target = _CONFIG.get('target_times', 'daily') \
             if _CONFIG.has_option('target_times', 'daily') else '8h'
@@ -143,10 +143,10 @@ def _get_default_target(date):
 def _interpolate_targets(targets, start, end):
     new_index = pd.Series(np.concatenate([
         pd.date_range(
-            pd.datetools.normalize_date(start),
-            pd.datetools.normalize_date(end)),
+            pd.tslib.normalize_date(start),
+            pd.tslib.normalize_date(end)),
         targets.index]))
-    new_index.sort()
+    new_index.sort_values()
     new_index = new_index.drop_duplicates()
     targets = targets.reindex(new_index)
 
@@ -154,7 +154,7 @@ def _interpolate_targets(targets, start, end):
         if not row['target'] is pd.NaT:
             return row
         else:
-            date = pd.datetools.normalize_date(row['index'])
+            date = pd.tslib.normalize_date(row['index'])
             target, description = _get_default_target(date)
             print(
                 'Assuming target work time for {}: {} '
@@ -198,7 +198,7 @@ def main_track(args):
             file=sys.stderr)
         sys.exit(1)
     # work past midnight
-    if pd.datetools.normalize_date(end) > pd.datetools.normalize_date(start):
+    if pd.tslib.normalize_date(end) > pd.tslib.normalize_date(start):
         print(
             'ERROR: Work across day boundary not supported '
             '(start: {}, end: {})'.format(start, end),
@@ -213,7 +213,7 @@ def main_track(args):
         start=start, end=end, correction=correction, description=description))
 
     times.loc[-1] = [start, end, correction, description]
-    times = times.sort('start').reset_index(drop=True)
+    times = times.sort_values('start').reset_index(drop=True)
 
     # add missing targets
     targets = _interpolate_targets(targets,
@@ -228,7 +228,7 @@ def main_track(args):
 def main_target(args):
     targets = _read_targets(TARGETS_FILE)
 
-    date = pd.datetools.normalize_date(pd.to_datetime(args.date))
+    date = pd.tslib.normalize_date(pd.to_datetime(args.date))
 
     if args.target is None:
         # just show the report
@@ -265,10 +265,10 @@ def main_report(args):
     raw_hours = times['end'] - times['start']
     raw_hours.replace(pd.NaT, pd.Timedelta(0))
     times['worktime'] = raw_hours + times['correction'].fillna(0)
-    times.index = times['start'].apply(pd.datetools.normalize_date)
+    times.index = times['start'].apply(pd.tslib.normalize_date)
 
     deltas = times[['worktime']]
-    deltas = deltas.resample('1d', how='sum')
+    deltas = deltas.resample('1d').sum()
     deltas['target'] = targets['target'].reindex(deltas.index)
     deltas['diff'] = deltas['worktime'] - deltas['target']
 
@@ -276,7 +276,7 @@ def main_report(args):
     deltas = deltas[deltas.index >= pd.to_datetime(args.since)]
 
     # resample according to desired report type
-    deltas = deltas.resample(args.frequency, how='sum')
+    deltas = deltas.resample(args.frequency).sum()
 
     # generate the desired report
     plot_type = 'bar'

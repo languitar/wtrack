@@ -3,10 +3,16 @@
 from __future__ import print_function
 
 import argparse
-import ConfigParser
+try:
+    import ConfigParser as configparser
+except ImportError:
+    import configparser
 import errno
 import os.path
-import urllib2
+try:
+    import urllib2 as request
+except ImportError:
+    from urllib import request
 import sys
 
 import icalendar
@@ -90,7 +96,7 @@ def _write_data(data, filename, columns):
 
 
 def _read_public_holidays(url):
-    response = urllib2.urlopen(url)
+    response = request.urlopen(url)
     calendar = icalendar.Calendar.from_ical(response.read())
     dates = []
     descriptions = []
@@ -304,7 +310,7 @@ def main():
     global _CONFIG
 
     # config file
-    _CONFIG = ConfigParser.ConfigParser()
+    _CONFIG = configparser.ConfigParser()
     _CONFIG.read([CONFIG_FILE])
 
     # command line parsing

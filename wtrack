@@ -210,6 +210,13 @@ def main_track(args):
 
     start = pd.to_datetime(args.start)
     end = pd.to_datetime(args.end)
+
+    # apply date override
+    if args.date:
+        date = pd.to_datetime(args.date)
+        start = start.replace(year=date.year, month=date.month, day=date.day)
+        end = end.replace(year=date.year, month=date.month, day=date.day)
+
     correction = pd.Timedelta(args.correction)
     description = args.description
 
@@ -376,6 +383,11 @@ def main():
         metavar='TIMEDELTA',
         default='-0.5h',
         help='correction factor as pandas-parseable timedelta')
+    track.add_argument(
+        '-d', '--date',
+        metavar='DATE',
+        help='Allows to specify a date that is automatically assumed for '
+             'times specified in start and end. Must be parseable by pandas.')
     track.add_argument(
         'start',
         help='start time of work, pandas-parseable format')

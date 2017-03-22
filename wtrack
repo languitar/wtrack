@@ -150,6 +150,8 @@ def _interpolate_targets(targets, start, end):
     new_index = new_index.drop_duplicates()
     targets = targets.reindex(new_index)
 
+    print()
+
     def fill_missing_target(row):
         if not row['target'] is pd.NaT:
             return row
@@ -157,8 +159,11 @@ def _interpolate_targets(targets, start, end):
             date = pd.tslib.normalize_date(row['index'])
             target, description = _get_default_target(date)
             print(
-                'Assuming target work time for {}: {} '
-                '(description: {})'.format(date, target, description),
+                'Assuming target work time for {}: {:%H:%M} '
+                '(description: {})'.format(
+                    date.date().strftime("%Y-%m-%d"),
+                    (pd.to_datetime('today') + target).to_pydatetime(),
+                    description),
                 file=sys.stderr)
             return pd.Series({'index': row['index'],
                               'target': target,
@@ -166,6 +171,20 @@ def _interpolate_targets(targets, start, end):
 
     return targets.reset_index().apply(
         fill_missing_target, axis=1).set_index('index')
+
+
+def _pretty_timedelta(delta):
+
+    sign = ''
+    date = pd.to_datetime('today')
+    if delta.total_seconds() < 0:
+        sign = '-'
+        date = date - delta
+    else:
+        sign = '+'
+        date = date + delta
+
+    return '{}{:%H:%M}'.format(sign, date.to_pydatetime())
 
 
 def main_track(args):
@@ -206,11 +225,13 @@ def main_track(args):
         sys.exit(1)
 
     print('''Adding entry:
-  Start: {start}
-  End: {end}
-  Correction: {correction}
-  Description: {description}'''.format(
-        start=start, end=end, correction=correction, description=description))
+  {start:%Y-%m-%d}
+    {start:%H:%M} - {end:%H:%M} ({correction})
+    Description: {description}'''.format(
+        start=start.to_pydatetime(),
+        end=end.to_pydatetime(),
+        correction=_pretty_timedelta(correction),
+        description=description))
 
     times.loc[-1] = [start, end, correction, description]
     times = times.sort_values('start').reset_index(drop=True)

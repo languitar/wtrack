@@ -173,6 +173,23 @@ def _interpolate_targets(targets, start, end):
         fill_missing_target, axis=1).set_index('index')
 
 
+def _warn_missing_entries(times, targets):
+
+    should_work = targets[targets['target'].apply(
+        lambda x: x.total_seconds()) > 0].index
+    missing = should_work[~should_work.isin(times['start'].apply(
+        lambda x: pd.to_datetime(x.date())))]
+    missing_this_year = missing[
+        missing > pd.to_datetime(
+            pd.to_datetime('now').to_pydatetime().strftime("%Y"))].to_series()
+
+    if not missing_this_year.empty:
+        print()
+        print("Missing entries:")
+        for date, _ in missing_this_year.iteritems():
+            print('  {:%Y-%m-%d}'.format(date.to_pydatetime()))
+
+
 def _pretty_timedelta(delta):
 
     sign = ''
@@ -240,6 +257,8 @@ def main_track(args):
     targets = _interpolate_targets(targets,
                                    times['start'].min(),
                                    times['end'].max())
+
+    _warn_missing_entries(times, targets)
 
     # if everything succeeded, write data
     _write_data(times, TIMES_FILE, _TIMES_COLUMNS)
@@ -328,6 +347,13 @@ def main_report(args):
         print(data.describe())
 
 
+def main_check(args):
+    times = _read_times(TIMES_FILE)
+    targets = _read_targets(TARGETS_FILE)
+
+    _warn_missing_entries(times, targets)
+
+
 def main():
     global _CONFIG
 
@@ -404,6 +430,12 @@ def main():
         choices=['total', 'delta', 'average'],
         help='the kind of report to produce')
     report.set_defaults(func=main_report)
+
+    report = subparsers.add_parser(
+        'check',
+        description='Checks for missing entries',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    report.set_defaults(func=main_check)
 
     args = parser.parse_args()
     try:

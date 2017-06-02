@@ -44,6 +44,10 @@ _WEEKDAY_MAPPING = {
 _CONFIG = None
 
 
+def _normalize_date(dt):
+    return dt.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
 def _read_data(filename):
     with open(filename, 'r') as fd:
         return pd.read_csv(fd, index_col=0)
@@ -123,9 +127,9 @@ def _get_holidays(year):
 
 
 def _get_default_target(date):
-    if pd.tslib.normalize_date(date) in _get_holidays(date.year):
+    if _normalize_date(date) in _get_holidays(date.year):
         return pd.Timedelta(0), _get_holidays(date.year)[
-            pd.tslib.normalize_date(date)]
+            _normalize_date(date)]
     else:
         target = _CONFIG.get('target_times', 'daily') \
             if _CONFIG.has_option('target_times', 'daily') else '8h'
@@ -143,8 +147,8 @@ def _get_default_target(date):
 def _interpolate_targets(targets, start, end):
     new_index = pd.Series(np.concatenate([
         pd.date_range(
-            pd.tslib.normalize_date(start),
-            pd.tslib.normalize_date(end)),
+            _normalize_date(start),
+            _normalize_date(end)),
         targets.index]))
     new_index.sort_values()
     new_index = new_index.drop_duplicates()
@@ -156,7 +160,7 @@ def _interpolate_targets(targets, start, end):
         if not row['target'] is pd.NaT:
             return row
         else:
-            date = pd.tslib.normalize_date(row['index'])
+            date = _normalize_date(row['index'])
             target, description = _get_default_target(date)
             print(
                 'Assuming target work time for {}: {:%H:%M} '
@@ -241,7 +245,7 @@ def main_track(args):
             file=sys.stderr)
         sys.exit(1)
     # work past midnight
-    if pd.tslib.normalize_date(end) > pd.tslib.normalize_date(start):
+    if _normalize_date(end) > _normalize_date(start):
         print(
             'ERROR: Work across day boundary not supported '
             '(start: {}, end: {})'.format(start, end),
@@ -275,7 +279,7 @@ def main_track(args):
 def main_target(args):
     targets = _read_targets(TARGETS_FILE)
 
-    date = pd.tslib.normalize_date(pd.to_datetime(args.date))
+    date = _normalize_date(pd.to_datetime(args.date))
 
     if args.target is None:
         # just show the report
@@ -312,7 +316,7 @@ def main_report(args):
     raw_hours = times['end'] - times['start']
     raw_hours.replace(pd.NaT, pd.Timedelta(0))
     times['worktime'] = raw_hours + times['correction'].fillna(0)
-    times.index = times['start'].apply(pd.tslib.normalize_date)
+    times.index = times['start'].apply(_normalize_date)
 
     deltas = times[['worktime']]
     deltas = deltas.resample('1d').sum()
